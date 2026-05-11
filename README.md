@@ -198,3 +198,43 @@ Run this command after seed_mongo.php:
 
 ### Recruiter URL
 http://localhost/Job-Portal-Application-Tracking-System--main/recruiter_index.php
+
+## How to Use (Recruiter)
+
+### Login / Register
+- **Register**: Fill out your details and company information
+- **Login**: Use your username and password to log in
+
+### Dashboard
+After login you will see:
+- Total jobs posted
+- Total applications received
+- Pending applications
+- Accepted applications
+
+### Post a Job
+Click **Post Job** to:
+- Add job title and description
+- Set location and salary
+- Select required skills
+- Submit the listing
+
+### Manage Jobs
+Click **My Jobs** to:
+- View all your posted jobs
+- See how many people applied
+- Edit job details
+- Delete a job
+
+### View Applicants
+Click **View Applicants** on any job to:
+- See all applicants with their name, email, phone
+- View their skills
+- Read their cover letter
+- Update their status: Pending, Shortlisted, Accepted, Rejected
+
+### Company Profile
+Click **Company Profile** to:
+- Update company name and email
+- Set industry and website
+- Add company description
