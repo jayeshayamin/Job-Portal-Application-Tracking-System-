@@ -134,3 +134,13 @@ function get_flash() {
     }
     return null;
 }
+function current_recruiter() {
+    return $_SESSION['recruiter'] ?? null;
+}
+
+function require_recruiter_login() {
+    if (!isset($_SESSION['recruiter'])) {
+        header('Location: recruiter_index.php');
+        exit;
+    }
+}
