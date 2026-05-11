@@ -173,7 +173,7 @@ Click **Applications** to see:
 5. Restart Apache in XAMPP Control Panel
 
 ### Blank Page
-## Recruiter Module (Person 2)
+## Recruiter Module (Person 2 - Complete)
 
 ### New Files Added
 - recruiter_index.php - Login/Register for recruiters
@@ -192,51 +192,9 @@ Click **Applications** to see:
 |----------|----------|------|
 | recruiter1 | password123 | Recruiter |
 
-### To Run
-After running seed_mongo.php, also run:
+### Setup
+Run this command after seed_mongo.php:
 .\php.exe "C:\xampp\htdocs\Job-Portal-Application-Tracking-System--main\seed_recruiter.php"
 
-### URL
+### Recruiter URL
 http://localhost/Job-Portal-Application-Tracking-System--main/recruiter_index.php
-
-**Solution**:
-1. Check XAMPP Apache is running (green status)
-2. Verify the URL: `http://localhost/Job-Portal-Application-Tracking-System-/index.php`
-3. Open the browser console (F12) and check for errors
-
----
-
-## File Structure
-
-```
-Job-Portal-Application-Tracking-System-/
-├── index.php              # Login/Register page
-├── config.php             # MongoDB connection & helpers
-├── dashboard.php          # Main dashboard
-├── profile.php            # Edit profile
-├── skills.php             # Manage skills
-├── jobs.php               # Search & filter jobs
-├── apply.php              # Job application form
-├── history.php            # Application history
-├── logout.php             # Logout
-├── seed_mongo.php         # Database seeding script
-├── style.css              # Styling
-└── README.md              # This file
-```
-
----
-
-## Next Steps (For Other Team Members)
-
-- **Recruiter Module**: Build job posting, application review, and status management
-- **Admin Module**: Build user management and system monitoring
-
----
-
-## Support
-
-For issues or questions, ensure:
-1. MongoDB is running
-2. PHP MongoDB extension is enabled
-3. XAMPP is running
-4. Folder is in `C:\xampp\htdocs\`
