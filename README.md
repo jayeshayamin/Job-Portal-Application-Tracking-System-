@@ -173,6 +173,31 @@ Click **Applications** to see:
 5. Restart Apache in XAMPP Control Panel
 
 ### Blank Page
+## Recruiter Module (Person 2)
+
+### New Files Added
+- recruiter_index.php - Login/Register for recruiters
+- recruiter_dashboard.php - Recruiter homepage with stats
+- recruiter_post_job.php - Post a new job
+- recruiter_jobs.php - View/edit/delete jobs
+- recruiter_edit_job.php - Edit existing job
+- recruiter_applicants.php - View applicants & update status
+- recruiter_company.php - Edit company profile
+- recruiter_logout.php - Logout
+- recruiter_navbar.php - Navigation bar
+- seed_recruiter.php - Sample recruiter data
+
+### Test Credentials
+| Username | Password | Role |
+|----------|----------|------|
+| recruiter1 | password123 | Recruiter |
+
+### To Run
+After running seed_mongo.php, also run:
+.\php.exe "C:\xampp\htdocs\Job-Portal-Application-Tracking-System--main\seed_recruiter.php"
+
+### URL
+http://localhost/Job-Portal-Application-Tracking-System--main/recruiter_index.php
 
 **Solution**:
 1. Check XAMPP Apache is running (green status)
