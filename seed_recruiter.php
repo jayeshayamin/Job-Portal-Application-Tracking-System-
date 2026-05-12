@@ -1,6 +1,4 @@
 <?php
-// seed_recruiter.php — run this ONCE to add sample recruiter/company data
-// Usage: .\php.exe "C:\xampp\htdocs\Job-Portal-Application-Tracking-System-\seed_recruiter.php"
 require_once 'config.php';
 
 echo "Starting recruiter seed...\n";
