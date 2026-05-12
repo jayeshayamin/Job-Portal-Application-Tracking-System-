@@ -1,6 +1,3 @@
--- SQL schema for Job Portal Application Tracking System
--- MySQL / MariaDB compatible
-
 CREATE DATABASE IF NOT EXISTS job_portal_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE job_portal_db;
 
