@@ -2,7 +2,7 @@
 require_once 'config.php';
 require_login();
 $user = current_user();
-$applicant = mongo_find_one('applicants', ['user_id' => mongo_object_id($user['_id'])]);
+$applicant = fetch_one('SELECT * FROM applicants WHERE user_id = ?', [$user['id']]);
 ?>
 <!DOCTYPE html>
 <html lang="en">

@@ -2,43 +2,69 @@
 require_once 'config.php';
 require_login();
 $user = current_user();
-$applicant = mongo_find_one('applicants', ['user_id' => mongo_object_id($user['_id'])]);
+$applicant = fetch_one('SELECT * FROM applicants WHERE user_id = ?', [$user['id']]);
 
-$job_id = sanitize($_GET['job_id'] ?? '');
-if ($job_id === '') {
+$job_id = (int)($_GET['job_id'] ?? 0);
+if ($job_id <= 0) {
     header('Location: jobs.php');
     exit;
 }
 
-$job = mongo_find_one('jobs', ['_id' => mongo_object_id($job_id)]);
+$job = fetch_one(
+    'SELECT j.*, c.name AS company_name FROM jobs j JOIN companies c ON j.company_id = c.id WHERE j.id = ?',
+    [$job_id]
+);
 if (!$job) {
     header('Location: jobs.php');
     exit;
 }
 
+$job_skills = fetch_all(
+    'SELECT s.name FROM skills s JOIN job_skills jk ON s.id = jk.skill_id WHERE jk.job_id = ?',
+    [$job_id]
+);
+
 $message = '';
+$cv_file = '';
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $cover_letter = sanitize($_POST['cover_letter'] ?? '');
-    
+
     if ($cover_letter === '') {
         $message = '<div class="alert alert-danger">Cover letter is required.</div>';
     } else {
-        $existing = mongo_find_one('applications', [
-            'applicant_id' => mongo_object_id($applicant['_id']),
-            'job_id' => mongo_object_id($job_id)
-        ]);
-        
+        $existing = fetch_one(
+            'SELECT id FROM applications WHERE applicant_id = ? AND job_id = ?',
+            [$applicant['id'], $job_id]
+        );
+
         if ($existing) {
             $message = '<div class="alert alert-warning">You have already applied for this job.</div>';
         } else {
-            mongo_insert_one('applications', [
-                'applicant_id' => mongo_object_id($applicant['_id']),
-                'job_id' => mongo_object_id($job_id),
-                'status' => 'pending',
-                'cover_letter' => $cover_letter,
-                'applied_at' => date('Y-m-d H:i:s'),
-            ]);
-            $message = '<div class="alert alert-success">Application submitted successfully!</div>';
+            // Handle CV upload
+            if (isset($_FILES['cv_file']) && $_FILES['cv_file']['error'] === UPLOAD_ERR_OK) {
+                $allowed_types = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+                $allowed_ext = ['pdf', 'doc', 'docx'];
+                $file_info = pathinfo($_FILES['cv_file']['name']);
+                $file_ext = strtolower($file_info['extension']);
+                $file_type = mime_content_type($_FILES['cv_file']['tmp_name']);
+
+                if (in_array($file_ext, $allowed_ext) && $_FILES['cv_file']['size'] <= 5 * 1024 * 1024) {
+                    if (!is_dir('uploads')) mkdir('uploads', 0755, true);
+                    $cv_file = 'uploads/cv_' . $applicant['id'] . '_' . time() . '.' . $file_ext;
+                    move_uploaded_file($_FILES['cv_file']['tmp_name'], $cv_file);
+                } else {
+                    $message = '<div class="alert alert-danger">Invalid CV file. Only PDF and Word documents (max 5MB) are allowed.</div>';
+                }
+            }
+
+            if ($message === '') {
+                execute(
+                    'INSERT INTO applications (applicant_id, job_id, status, cover_letter, cv_file, applied_at) VALUES (?, ?, ?, ?, ?, ?)',
+                    [$applicant['id'], $job_id, 'pending', $cover_letter, $cv_file, date('Y-m-d H:i:s')]
+                );
+                $message = '<div class="alert alert-success">Application submitted successfully!</div>';
+            }
         }
     }
 }
@@ -75,20 +101,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     <div class="alert alert-info mb-4">
                         <strong>Job Details</strong>
+                        <p><strong>Company:</strong> <?= sanitize($job['company_name']) ?></p>
                         <p><strong>Location:</strong> <?= sanitize($job['location'] ?? 'Remote') ?></p>
                         <p><strong>Salary:</strong> PKR <?= number_format($job['salary'] ?? 0) ?></p>
                         <p><strong>Description:</strong> <?= sanitize($job['description']) ?></p>
-                        <p><strong>Required Skills:</strong> 
-                            <?php foreach ($job['skills'] ?? [] as $skill): ?>
-                                <span class="badge bg-secondary"><?= sanitize($skill) ?></span>
+                        <p><strong>Required Skills:</strong>
+                            <?php foreach ($job_skills as $skill): ?>
+                                <span class="badge bg-secondary"><?= sanitize($skill['name']) ?></span>
                             <?php endforeach; ?>
                         </p>
                     </div>
 
-                    <form method="post">
+                    <form method="post" enctype="multipart/form-data">
                         <div class="mb-3">
                             <label class="form-label">Cover Letter</label>
                             <textarea name="cover_letter" class="form-control" rows="6" placeholder="Tell the recruiter why you're a great fit for this role..." required></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Upload CV (Optional)</label>
+                            <input type="file" name="cv_file" class="form-control" accept=".pdf,.doc,.docx">
+                            <small class="text-muted">Accepted formats: PDF, DOC, DOCX (max 5MB)</small>
                         </div>
                         <button class="btn btn-success">Submit Application</button>
                         <a href="jobs.php" class="btn btn-secondary">Cancel</a>

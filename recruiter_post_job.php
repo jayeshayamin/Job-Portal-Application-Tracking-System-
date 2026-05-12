@@ -2,8 +2,8 @@
 require_once 'config.php';
 require_recruiter_login();
 $recruiter = current_recruiter();
-$company   = mongo_find_one('companies', ['_id' => mongo_object_id($recruiter['company_id'])]);
-$all_skills = mongo_find('skills', [], ['sort' => ['name' => 1]]);
+$company = fetch_one('SELECT * FROM companies WHERE id = ?', [$recruiter['company_id']]);
+$all_skills = fetch_all('SELECT * FROM skills ORDER BY name ASC');
 
 $message = '';
 
@@ -18,18 +18,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($title === '' || $description === '') {
         $message = '<div class="alert alert-danger">Title and description are required.</div>';
     } else {
-        mongo_insert_one('jobs', [
-            'title'       => $title,
-            'description' => $description,
-            'location'    => $location,
-            'salary'      => $salary,
-            'skills'      => $skills,
-            'company_id'  => mongo_object_id($company['_id']),
-            'company_name'=> $company['name'],
-            'posted_by'   => mongo_object_id($recruiter['_id']),
-            'posted_at'   => date('Y-m-d H:i:s'),
-        ]);
-        $message = '<div class="alert alert-success">Job posted successfully! <a href="recruiter_jobs.php">View all jobs</a></div>';
+        try {
+            begin_transaction();
+            execute(
+                'INSERT INTO jobs (company_id, recruiter_id, title, description, location, salary, posted_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                [$company['id'], $recruiter['id'], $title, $description, $location, $salary, date('Y-m-d H:i:s')]
+            );
+            $job_id = last_insert_id();
+
+            foreach ($skills as $skill_name) {
+                $skill = fetch_one('SELECT id FROM skills WHERE name = ?', [$skill_name]);
+                if ($skill) {
+                    execute('INSERT INTO job_skills (job_id, skill_id) VALUES (?, ?)', [$job_id, $skill['id']]);
+                }
+            }
+
+            commit_transaction();
+            $message = '<div class="alert alert-success">Job posted successfully! <a href="recruiter_jobs.php">View all jobs</a></div>';
+        } catch (Exception $e) {
+            rollback_transaction();
+            $message = '<div class="alert alert-danger">Failed to post the job. Please try again.</div>';
+        }
     }
 }
 ?>
@@ -77,8 +86,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 <?php foreach ($all_skills as $skill): ?>
                                     <div class="col-md-3 col-6">
                                         <div class="form-check">
-                                            <input class="form-check-input" type="checkbox" name="skills[]" value="<?= sanitize($skill['name']) ?>" id="skill_<?= sanitize($skill['_id']) ?>">
-                                            <label class="form-check-label" for="skill_<?= sanitize($skill['_id']) ?>"><?= sanitize($skill['name']) ?></label>
+                                            <input class="form-check-input" type="checkbox" name="skills[]" value="<?= sanitize($skill['name']) ?>" id="skill_<?= sanitize($skill['id']) ?>">
+                                            <label class="form-check-label" for="skill_<?= sanitize($skill['id']) ?>"><?= sanitize($skill['name']) ?></label>
                                         </div>
                                     </div>
                                 <?php endforeach; ?>

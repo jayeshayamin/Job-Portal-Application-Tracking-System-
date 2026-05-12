@@ -11,8 +11,6 @@ $error = '';
 $success = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
-
-    // ── LOGIN ──────────────────────────────────────────────────────────────
     if ($_POST['action'] === 'login') {
         $username = sanitize($_POST['username'] ?? '');
         $password = $_POST['password'] ?? '';
@@ -20,17 +18,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         if ($username === '' || $password === '') {
             $error = 'Username and password are required.';
         } else {
-            $recruiter = mongo_find_one('recruiters', ['username' => $username]);
+            $recruiter = fetch_one(
+                'SELECT r.*, u.id AS user_id, u.username, u.password FROM recruiters r JOIN users u ON r.user_id = u.id WHERE u.username = ? AND u.role = ?',
+                [$username, 'recruiter']
+            );
+
             if ($recruiter && hash('sha256', $password) === $recruiter['password']) {
                 $_SESSION['recruiter'] = $recruiter;
+                unset($_SESSION['recruiter']['password']);
                 header('Location: recruiter_dashboard.php');
                 exit;
-            } else {
-                $error = 'Invalid username or password.';
             }
+            $error = 'Invalid username or password.';
         }
-
-    // ── REGISTER ───────────────────────────────────────────────────────────
     } elseif ($_POST['action'] === 'register') {
         $username      = sanitize($_POST['username']      ?? '');
         $password      = $_POST['password']               ?? '';
@@ -44,32 +44,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
         if ($username === '' || $password === '' || $full_name === '' || $email === '' || $company_name === '') {
             $error = 'Username, password, full name, email, and company name are required.';
-        } elseif (mongo_find_one('recruiters', ['username' => $username])) {
+        } elseif (fetch_one('SELECT id FROM users WHERE username = ?', [$username])) {
             $error = 'Username already exists.';
         } else {
-            // Create company first
-            $company_id = mongo_insert_one('companies', [
-                'name'         => $company_name,
-                'email'        => $company_email,
-                'industry'     => $industry,
-                'website'      => $website,
-                'description'  => '',
-                'created_at'   => date('Y-m-d H:i:s'),
-            ]);
+            try {
+                begin_transaction();
 
-            // Create recruiter linked to company
-            mongo_insert_one('recruiters', [
-                'username'   => $username,
-                'password'   => hash('sha256', $password),
-                'full_name'  => $full_name,
-                'email'      => $email,
-                'phone'      => $phone,
-                'company_id' => mongo_object_id($company_id),
-                'role'       => 'recruiter',
-                'created_at' => date('Y-m-d H:i:s'),
-            ]);
+                execute(
+                    'INSERT INTO companies (name, email, industry, website, description, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+                    [$company_name, $company_email, $industry, $website, '', date('Y-m-d H:i:s')]
+                );
+                $company_id = last_insert_id();
 
-            $success = 'Registration successful! Please login.';
+                execute(
+                    'INSERT INTO users (username, password, role, created_at) VALUES (?, ?, ?, ?)',
+                    [$username, hash('sha256', $password), 'recruiter', date('Y-m-d H:i:s')]
+                );
+                $user_id = last_insert_id();
+
+                execute(
+                    'INSERT INTO recruiters (user_id, company_id, full_name, email, phone, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+                    [$user_id, $company_id, $full_name, $email, $phone, date('Y-m-d H:i:s')]
+                );
+
+                commit_transaction();
+                $success = 'Registration successful! Please login.';
+            } catch (Exception $e) {
+                rollback_transaction();
+                $error = 'Registration failed. Please try again.';
+            }
         }
     }
 }
@@ -179,7 +182,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
                     </div><!-- end tab-content -->
                     <hr>
-                    <p class="text-center text-muted small mb-0">Are you an applicant? <a href="index.php">Go to Applicant Login</a></p>
+                    <p class="text-center text-muted small mb-0">Are you an applicant? <a href="applicant_index.php">Go to Applicant Login</a></p>
+                    <p class="text-center text-muted small">Admin? <a href="admin_index.php">Go to Admin Login</a> • <a href="login.php">Unified Login</a></p>
                 </div>
             </div>
         </div>

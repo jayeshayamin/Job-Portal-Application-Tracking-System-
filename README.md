@@ -4,22 +4,30 @@
 
 This repository contains only the **Applicant Module** of the Online Job Portal & Application Tracking System. It implements applicant registration/login, profile management, skills management, job search/filter, job application, and application history.
 
-## MongoDB Collections
+## Database Schema
 
-- **users**: Stores login credentials for applicants
-- **applicants**: Applicant profile information and skills array
-- **jobs**: Job postings with requirements
-- **skills**: Available skills in the system
-- **applications**: Records of job applications with status
+This project currently uses MySQL / MariaDB.
+
+- **users**: Stores login credentials and roles
+- **applicants**: Applicant profile information
+- **recruiters**: Recruiter profiles linked to companies
+- **companies**: Company information for recruiter accounts
+- **jobs**: Job postings published by recruiters
+- **skills**: Available skill tags
+- **applications**: Job applications submitted by applicants
+- **applicant_skills**: Skills added by applicants
+- **job_skills**: Skill requirements for jobs
 
 ## Features
 
 ✅ User Registration & Login  
-✅ Profile Management (name, email, headline, bio)  
-✅ Add/Remove Skills  
-✅ Search & Filter Jobs  
+✅ Recruiter Registration & Job Management  
+✅ Admin Login & Management  
+✅ Applicant Profile Management  
+✅ Skills Management  
+✅ Job Search & Filtering  
 ✅ Apply for Jobs with Cover Letter  
-✅ View Application History & Status  
+✅ Application History & Status Tracking  
 
 ---
 
@@ -27,61 +35,39 @@ This repository contains only the **Applicant Module** of the Online Job Portal 
 
 ### Prerequisites
 
-1. **MongoDB** installed and running on `mongodb://127.0.0.1:27017`
-2. **PHP 7.4+** with MongoDB extension enabled
-3. **XAMPP** or any PHP web server
+1. **MySQL/MariaDB** installed and running
+2. **PHP 7.4+**
+3. **XAMPP**, **WAMP**, or any PHP web server
 
-### Step 1: Install MongoDB
+### Step 1: Create the Database
 
-If you don't have MongoDB installed:
-- Download from: https://www.mongodb.com/try/download/community
-- Install and ensure MongoDB is running in the background
-- Check it's running: `mongosh` should connect successfully
+Import the schema file into MySQL using phpMyAdmin or command line.
 
-### Step 2: Enable MongoDB PHP Extension
-
-1. Find `php.ini` in your XAMPP installation (typically `C:\xampp\php\php.ini`)
-2. Uncomment or add: `extension=mongodb`
-3. Save and restart Apache in XAMPP
-
-To verify MongoDB is enabled:
+Using command line:
 ```bash
-cd C:\xampp\php
-php -r "echo extension_loaded('mongodb') ? 'MongoDB enabled' : 'MongoDB disabled';"
+mysql -u root -p < schema.sql
 ```
 
-### Step 3: Copy Project to XAMPP
+### Step 2: Seed the Database
 
-Place this folder in XAMPP's document root:
+Use the provided SQL seeder to create sample data.
+
+From your PHP installation directory (or using the PHP on PATH):
+```bash
+php seed_mysql.php
+```
+
+### Step 3: Place the Project in Your Web Root
+
+Example XAMPP path:
 ```
 C:\xampp\htdocs\Job-Portal-Application-Tracking-System-\
 ```
 
-### Step 4: Populate Database
-
-Open PowerShell and run:
-```bash
-cd "C:\xampp\php"
-.\php.exe "C:\xampp\htdocs\Job-Portal-Application-Tracking-System-\seed_mongo.php"
-```
-
-Expected output:
-```
-Starting seed...
-✓ Cleared collections
-✓ Added 8 skills
-✓ Created test applicant (username: applicant1, password: password123)
-✓ Added 4 sample jobs
-✓ Added 1 sample application
-
-✅ Seed completed successfully!
-Test Login: applicant1 / password123
-```
-
-### Step 5: Start XAMPP
+### Step 4: Start the Web Server
 
 1. Open XAMPP Control Panel
-2. Click **Start** next to Apache
+2. Start Apache and MySQL
 3. Open browser: `http://localhost/Job-Portal-Application-Tracking-System-/index.php`
 
 ---
@@ -145,7 +131,16 @@ Click **Applications** to see:
 
 | Username | Password | Role |
 |----------|----------|------|
+| admin | admin123 | Administrator |
 | applicant1 | password123 | Applicant |
+| recruiter1 | password123 | Recruiter |
+
+### Access URLs
+- **Main Website**: http://localhost/Job-Portal-Application-Tracking-System-/index.php
+- **Unified Login**: http://localhost/Job-Portal-Application-Tracking-System-/login.php
+- **Applicant Registration**: http://localhost/Job-Portal-Application-Tracking-System-/applicant_index.php
+- **Recruiter Registration**: http://localhost/Job-Portal-Application-Tracking-System-/recruiter_index.php
+- **Admin Login**: http://localhost/Job-Portal-Application-Tracking-System-/admin_index.php
 
 ---
 
@@ -176,13 +171,16 @@ Click **Applications** to see:
 ## Recruiter Module (Person 2 - Complete)
 
 ### New Files Added
+- index.php - Welcome/landing page with role selection
+- login.php - Unified login page for all user types (applicant, recruiter, admin)
+- applicant_index.php - Applicant registration page
 - recruiter_index.php - Login/Register for recruiters
-- recruiter_dashboard.php - Recruiter homepage with stats
-- recruiter_post_job.php - Post a new job
-- recruiter_jobs.php - View/edit/delete jobs
-- recruiter_edit_job.php - Edit existing job
-- recruiter_applicants.php - View applicants & update status
-- recruiter_company.php - Edit company profile
+- admin_index.php - Admin login page
+- admin_dashboard.php - Admin homepage with system overview
+- admin_users.php - User management (CRUD operations)
+- admin_companies.php - Company management (CRUD operations)
+- admin_navbar.php - Admin navigation bar
+- admin_logout.php - Admin logout functionality
 - recruiter_logout.php - Logout
 - recruiter_navbar.php - Navigation bar
 - seed_recruiter.php - Sample recruiter data

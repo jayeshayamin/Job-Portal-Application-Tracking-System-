@@ -2,38 +2,56 @@
 require_once 'config.php';
 require_login();
 $user = current_user();
-$applicant = mongo_find_one('applicants', ['user_id' => mongo_object_id($user['_id'])]);
+$applicant = fetch_one('SELECT * FROM applicants WHERE user_id = ?', [$user['id']]);
 
 $message = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
-    
+
     if ($action === 'add') {
         $skill_name = trim($_POST['skill_name'] ?? '');
         if ($skill_name === '') {
             $message = '<div class="alert alert-danger">Skill name is required.</div>';
-        } elseif (in_array($skill_name, $applicant['skills'] ?? [], true)) {
-            $message = '<div class="alert alert-warning">You already have this skill.</div>';
         } else {
-            $skills = $applicant['skills'] ?? [];
-            $skills[] = $skill_name;
-            mongo_update_one('applicants', ['_id' => mongo_object_id($applicant['_id'])], ['$set' => ['skills' => $skills]]);
-            $applicant = mongo_find_one('applicants', ['_id' => mongo_object_id($applicant['_id'])]);
-            $message = '<div class="alert alert-success">Skill added!</div>';
+            $skill = fetch_one('SELECT id FROM skills WHERE name = ?', [$skill_name]);
+            if (!$skill) {
+                execute('INSERT INTO skills (name) VALUES (?)', [$skill_name]);
+                $skill = ['id' => last_insert_id()];
+            }
+
+            $existing = fetch_one(
+                'SELECT 1 FROM applicant_skills WHERE applicant_id = ? AND skill_id = ?',
+                [$applicant['id'], $skill['id']]
+            );
+
+            if ($existing) {
+                $message = '<div class="alert alert-warning">You already have this skill.</div>';
+            } else {
+                execute(
+                    'INSERT INTO applicant_skills (applicant_id, skill_id) VALUES (?, ?)',
+                    [$applicant['id'], $skill['id']]
+                );
+                $message = '<div class="alert alert-success">Skill added!</div>';
+            }
         }
     } elseif ($action === 'remove') {
         $skill_name = trim($_POST['skill_name'] ?? '');
-        $skills = $applicant['skills'] ?? [];
-        $skills = array_filter($skills, fn($s) => $s !== $skill_name);
-        $skills = array_values($skills);
-        mongo_update_one('applicants', ['_id' => mongo_object_id($applicant['_id'])], ['$set' => ['skills' => $skills]]);
-        $applicant = mongo_find_one('applicants', ['_id' => mongo_object_id($applicant['_id'])]);
-        $message = '<div class="alert alert-success">Skill removed!</div>';
+        $skill = fetch_one('SELECT id FROM skills WHERE name = ?', [$skill_name]);
+        if ($skill) {
+            execute(
+                'DELETE FROM applicant_skills WHERE applicant_id = ? AND skill_id = ?',
+                [$applicant['id'], $skill['id']]
+            );
+            $message = '<div class="alert alert-success">Skill removed!</div>';
+        }
     }
 }
 
-$all_skills = mongo_find('skills', [], ['sort' => ['name' => 1]]);
-$user_skills = $applicant['skills'] ?? [];
+$all_skills = fetch_all('SELECT * FROM skills ORDER BY name ASC');
+$user_skills = fetch_all(
+    'SELECT s.name FROM skills s JOIN applicant_skills ak ON s.id = ak.skill_id WHERE ak.applicant_id = ? ORDER BY s.name ASC',
+    [$applicant['id']]
+);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -72,7 +90,7 @@ $user_skills = $applicant['skills'] ?? [];
                                 <input type="hidden" name="action" value="add">
                                 <div class="mb-3">
                                     <label class="form-label">Skill Name</label>
-                                    <input type="text" name="skill_name" class="form-control" placeholder="e.g., PHP, JavaScript, MongoDB" required>
+                                    <input type="text" name="skill_name" class="form-control" placeholder="e.g., PHP, JavaScript, SQL" required>
                                 </div>
                                 <button class="btn btn-success">Add Skill</button>
                             </form>
@@ -85,10 +103,10 @@ $user_skills = $applicant['skills'] ?? [];
                                 <?php else: ?>
                                     <?php foreach ($user_skills as $skill): ?>
                                         <div class="badge bg-primary mb-2" style="font-size: 1rem; padding: 0.5rem 1rem;">
-                                            <?= sanitize($skill) ?>
+                                            <?= sanitize($skill['name']) ?>
                                             <form method="post" style="display: inline;">
                                                 <input type="hidden" name="action" value="remove">
-                                                <input type="hidden" name="skill_name" value="<?= sanitize($skill) ?>">
+                                                <input type="hidden" name="skill_name" value="<?= sanitize($skill['name']) ?>">
                                                 <button type="submit" class="btn-close btn-close-white" aria-label="Close" style="margin-left: 0.5rem;"></button>
                                             </form>
                                         </div>

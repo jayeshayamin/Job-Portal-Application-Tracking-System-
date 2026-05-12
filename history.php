@@ -2,14 +2,16 @@
 require_once 'config.php';
 require_login();
 $user = current_user();
-$applicant = mongo_find_one('applicants', ['user_id' => mongo_object_id($user['_id'])]);
+$applicant = fetch_one('SELECT * FROM applicants WHERE user_id = ?', [$user['id']]);
 
-$applications = mongo_aggregate('applications', [
-    ['$match' => ['applicant_id' => mongo_object_id($applicant['_id'])]],
-    ['$lookup' => ['from' => 'jobs', 'localField' => 'job_id', 'foreignField' => '_id', 'as' => 'job']],
-    ['$unwind' => '$job'],
-    ['$sort' => ['applied_at' => -1]],
-]);
+$applications = fetch_all(
+    'SELECT a.*, j.title AS job_title, j.location AS job_location, j.salary AS job_salary '
+    . 'FROM applications a '
+    . 'JOIN jobs j ON a.job_id = j.id '
+    . 'WHERE a.applicant_id = ? '
+    . 'ORDER BY a.applied_at DESC',
+    [$applicant['id']]
+);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -50,47 +52,37 @@ $applications = mongo_aggregate('applications', [
                                 <th>Salary</th>
                                 <th>Applied Date</th>
                                 <th>Status</th>
-                                <th>Cover Letter</th>
+                                <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             <?php foreach ($applications as $app): ?>
                                 <tr>
-                                    <td><?= sanitize($app['job']['title'] ?? '') ?></td>
-                                    <td><?= sanitize($app['job']['location'] ?? 'Remote') ?></td>
-                                    <td>PKR <?= number_format($app['job']['salary'] ?? 0) ?></td>
+                                    <td><?= sanitize($app['job_title'] ?? '') ?></td>
+                                    <td><?= sanitize($app['job_location'] ?? 'Remote') ?></td>
+                                    <td>PKR <?= number_format($app['job_salary'] ?? 0) ?></td>
                                     <td><?= sanitize($app['applied_at'] ?? '') ?></td>
                                     <td>
                                         <?php
                                         $status = $app['status'] ?? 'pending';
-                                        $badge_class = match($status) {
-                                            'pending' => 'bg-warning',
-                                            'shortlisted' => 'bg-info',
-                                            'accepted' => 'bg-success',
-                                            'rejected' => 'bg-danger',
-                                            default => 'bg-secondary',
-                                        };
+                                        if ($status === 'pending') {
+                                            $badge_class = 'bg-warning';
+                                        } elseif ($status === 'shortlisted') {
+                                            $badge_class = 'bg-info';
+                                        } elseif ($status === 'accepted') {
+                                            $badge_class = 'bg-success';
+                                        } elseif ($status === 'rejected') {
+                                            $badge_class = 'bg-danger';
+                                        } else {
+                                            $badge_class = 'bg-secondary';
+                                        }
                                         ?>
                                         <span class="badge <?= $badge_class ?>"><?= sanitize(ucfirst($status)) ?></span>
                                     </td>
                                     <td>
-                                        <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#letter<?= $app['_id'] ?>">View</button>
+                                        <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#letterModal<?= $app['id'] ?>">View Letter</button>
                                     </td>
                                 </tr>
-
-                                <div class="modal fade" id="letter<?= $app['_id'] ?>" tabindex="-1">
-                                    <div class="modal-dialog">
-                                        <div class="modal-content">
-                                            <div class="modal-header">
-                                                <h5 class="modal-title">Cover Letter</h5>
-                                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                                            </div>
-                                            <div class="modal-body">
-                                                <p><?= sanitize($app['cover_letter']) ?></p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
                             <?php endforeach; ?>
                         </tbody>
                     </table>
@@ -100,6 +92,70 @@ $applications = mongo_aggregate('applications', [
     </div>
 </div>
 
+<!-- Modals outside the table to prevent glitching -->
+<?php if (count($applications) > 0): ?>
+    <?php foreach ($applications as $app): ?>
+        <div class="modal fade" id="letterModal<?= $app['id'] ?>" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Cover Letter - <?= sanitize($app['job_title']) ?></h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <pre class="letter-content"><?= sanitize($app['cover_letter']) ?></pre>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    <?php endforeach; ?>
+<?php endif; ?>
+    </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+// Prevent modal glitching when mouse is on page
+document.addEventListener('DOMContentLoaded', function() {
+    // Add event listeners to all modals
+    const modals = document.querySelectorAll('.modal');
+    modals.forEach(modal => {
+        // Prevent pointer events from passing through
+        modal.addEventListener('mouseenter', function(e) {
+            e.stopPropagation();
+        });
+        modal.addEventListener('mouseover', function(e) {
+            e.stopPropagation();
+        });
+        modal.addEventListener('mousemove', function(e) {
+            e.stopPropagation();
+        });
+        
+        // Ensure modal stays visible
+        const backdrop = document.querySelector('.modal-backdrop');
+        if (backdrop) {
+            backdrop.style.pointerEvents = 'auto';
+        }
+    });
+    
+    // Disable table hover when modal is active
+    const viewButtons = document.querySelectorAll('[data-bs-toggle="modal"]');
+    viewButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            document.body.style.overflow = 'hidden';
+        });
+    });
+    
+    // Re-enable table hover when modal closes
+    modals.forEach(modal => {
+        modal.addEventListener('hidden.bs.modal', function() {
+            document.body.style.overflow = 'auto';
+        });
+    });
+});
+</script>
 </body>
 </html>

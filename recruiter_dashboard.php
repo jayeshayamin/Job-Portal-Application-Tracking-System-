@@ -2,13 +2,21 @@
 require_once 'config.php';
 require_recruiter_login();
 $recruiter = current_recruiter();
-$company   = mongo_find_one('companies', ['_id' => mongo_object_id($recruiter['company_id'])]);
+$company = fetch_one('SELECT * FROM companies WHERE id = ?', [$recruiter['company_id']]);
 
-// Quick stats
-$total_jobs         = mongo_count('jobs',         ['company_id' => mongo_object_id($company['_id'])]);
-$total_applications = mongo_count('applications', ['company_id' => mongo_object_id($company['_id'])]);
-$pending_count      = mongo_count('applications', ['company_id' => mongo_object_id($company['_id']), 'status' => 'pending']);
-$accepted_count     = mongo_count('applications', ['company_id' => mongo_object_id($company['_id']), 'status' => 'accepted']);
+$total_jobs = fetch_one('SELECT COUNT(*) AS count FROM jobs WHERE company_id = ?', [$company['id']])['count'];
+$total_applications = fetch_one(
+    'SELECT COUNT(*) AS count FROM applications a JOIN jobs j ON a.job_id = j.id WHERE j.company_id = ?',
+    [$company['id']]
+)['count'];
+$pending_count = fetch_one(
+    'SELECT COUNT(*) AS count FROM applications a JOIN jobs j ON a.job_id = j.id WHERE j.company_id = ? AND a.status = ?',
+    [$company['id'], 'pending']
+)['count'];
+$accepted_count = fetch_one(
+    'SELECT COUNT(*) AS count FROM applications a JOIN jobs j ON a.job_id = j.id WHERE j.company_id = ? AND a.status = ?',
+    [$company['id'], 'accepted']
+)['count'];
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -37,7 +45,7 @@ $accepted_count     = mongo_count('applications', ['company_id' => mongo_object_
         <div class="col-md-3">
             <div class="card text-white bg-primary text-center">
                 <div class="card-body">
-                    <h2 class="display-5"><?= $total_jobs ?></h2>
+                    <h2 class="display-5"><?= sanitize($total_jobs) ?></h2>
                     <p class="mb-0">Jobs Posted</p>
                 </div>
             </div>
@@ -45,7 +53,7 @@ $accepted_count     = mongo_count('applications', ['company_id' => mongo_object_
         <div class="col-md-3">
             <div class="card text-white bg-info text-center">
                 <div class="card-body">
-                    <h2 class="display-5"><?= $total_applications ?></h2>
+                    <h2 class="display-5"><?= sanitize($total_applications) ?></h2>
                     <p class="mb-0">Total Applications</p>
                 </div>
             </div>
@@ -53,7 +61,7 @@ $accepted_count     = mongo_count('applications', ['company_id' => mongo_object_
         <div class="col-md-3">
             <div class="card text-white bg-warning text-center">
                 <div class="card-body">
-                    <h2 class="display-5"><?= $pending_count ?></h2>
+                    <h2 class="display-5"><?= sanitize($pending_count) ?></h2>
                     <p class="mb-0">Pending Review</p>
                 </div>
             </div>
@@ -61,7 +69,7 @@ $accepted_count     = mongo_count('applications', ['company_id' => mongo_object_
         <div class="col-md-3">
             <div class="card text-white bg-success text-center">
                 <div class="card-body">
-                    <h2 class="display-5"><?= $accepted_count ?></h2>
+                    <h2 class="display-5"><?= sanitize($accepted_count) ?></h2>
                     <p class="mb-0">Accepted</p>
                 </div>
             </div>

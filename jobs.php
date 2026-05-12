@@ -2,27 +2,43 @@
 require_once 'config.php';
 require_login();
 $user = current_user();
-$applicant = mongo_find_one('applicants', ['user_id' => mongo_object_id($user['_id'])]);
+$applicant = fetch_one('SELECT * FROM applicants WHERE user_id = ?', [$user['id']]);
 
 $search = sanitize($_GET['search'] ?? '');
 $skill_filter = sanitize($_GET['skill'] ?? '');
 
-$filter = [];
-if ($search !== '') {
-    $filter['$or'] = [
-        ['title' => ['$regex' => $search, '$options' => 'i']],
-        ['description' => ['$regex' => $search, '$options' => 'i']],
-        ['location' => ['$regex' => $search, '$options' => 'i']],
-    ];
-}
+$params = [];
+$sql = 'SELECT j.id, j.title, j.description, j.location, j.salary, j.posted_at, c.name AS company_name, '
+    . 'GROUP_CONCAT(DISTINCT s.name ORDER BY s.name SEPARATOR ",") AS skills '
+    . 'FROM jobs j '
+    . 'JOIN companies c ON j.company_id = c.id '
+    . 'LEFT JOIN job_skills jk ON jk.job_id = j.id '
+    . 'LEFT JOIN skills s ON s.id = jk.skill_id ';
+
 if ($skill_filter !== '') {
-    $filter['skills'] = ['$in' => [$skill_filter]];
+    $sql .= 'JOIN job_skills jkf ON jkf.job_id = j.id '
+          . 'JOIN skills sf ON sf.id = jkf.skill_id AND sf.name = ? ';
+    $params[] = $skill_filter;
 }
 
-$jobs = mongo_find('jobs', $filter, ['sort' => ['posted_at' => -1]]);
-$all_skills = mongo_find('skills', [], ['sort' => ['name' => 1]]);
-$user_applied_jobs = mongo_find('applications', ['applicant_id' => mongo_object_id($applicant['_id'])], ['projection' => ['job_id' => 1]]);
-$applied_job_ids = array_map(fn($app) => (string)$app['job_id'], $user_applied_jobs);
+$where = [];
+if ($search !== '') {
+    $where[] = '(j.title LIKE ? OR j.description LIKE ? OR j.location LIKE ?)';
+    $params[] = '%' . $search . '%';
+    $params[] = '%' . $search . '%';
+    $params[] = '%' . $search . '%';
+}
+
+if (count($where) > 0) {
+    $sql .= 'WHERE ' . implode(' AND ', $where) . ' ';
+}
+
+$sql .= 'GROUP BY j.id ORDER BY j.posted_at DESC';
+$jobs = fetch_all($sql, $params);
+$all_skills = fetch_all('SELECT * FROM skills ORDER BY name ASC');
+
+$user_applied_job_ids = fetch_all('SELECT job_id FROM applications WHERE applicant_id = ?', [$applicant['id']]);
+$applied_job_ids = array_map(fn($app) => (int)$app['job_id'], $user_applied_job_ids);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -88,17 +104,19 @@ $applied_job_ids = array_map(fn($app) => (string)$app['job_id'], $user_applied_j
                             <div class="mb-3">
                                 <strong>Required Skills:</strong>
                                 <div>
-                                    <?php foreach ($job['skills'] ?? [] as $skill): ?>
-                                        <span class="badge bg-secondary"><?= sanitize($skill) ?></span>
+                                    <?php foreach (explode(',', $job['skills'] ?? '') as $skill): ?>
+                                        <?php if (trim($skill) !== ''): ?>
+                                            <span class="badge bg-secondary"><?= sanitize($skill) ?></span>
+                                        <?php endif; ?>
                                     <?php endforeach; ?>
                                 </div>
                             </div>
 
-                            <?php $job_id_str = (string)$job['_id']; ?>
-                            <?php if (in_array($job_id_str, $applied_job_ids, true)): ?>
+                            <?php $job_id_int = (int)$job['id']; ?>
+                            <?php if (in_array($job_id_int, $applied_job_ids, true)): ?>
                                 <button class="btn btn-success" disabled>Already Applied</button>
                             <?php else: ?>
-                                <a href="apply.php?job_id=<?= urlencode($job_id_str) ?>" class="btn btn-primary">Apply Now</a>
+                                <a href="apply.php?job_id=<?= urlencode($job_id_int) ?>" class="btn btn-primary">Apply Now</a>
                             <?php endif; ?>
                         </div>
                     </div>

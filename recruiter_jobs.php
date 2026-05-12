@@ -2,22 +2,30 @@
 require_once 'config.php';
 require_recruiter_login();
 $recruiter = current_recruiter();
-$company   = mongo_find_one('companies', ['_id' => mongo_object_id($recruiter['company_id'])]);
+$company = fetch_one('SELECT * FROM companies WHERE id = ?', [$recruiter['company_id']]);
 
 $message = '';
 
-// Handle delete
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delete') {
-    $job_id = sanitize($_POST['job_id'] ?? '');
-    if ($job_id !== '') {
-        mongo_delete_one('jobs', ['_id' => mongo_object_id($job_id), 'company_id' => mongo_object_id($company['_id'])]);
-        // Also delete all applications for this job
-        mongo_delete_many('applications', ['job_id' => mongo_object_id($job_id)]);
+    $job_id = (int)($_POST['job_id'] ?? 0);
+    if ($job_id > 0) {
+        execute('DELETE FROM jobs WHERE id = ? AND company_id = ?', [$job_id, $company['id']]);
         $message = '<div class="alert alert-success">Job deleted successfully.</div>';
     }
 }
 
-$jobs = mongo_find('jobs', ['company_id' => mongo_object_id($company['_id'])], ['sort' => ['posted_at' => -1]]);
+$jobs = fetch_all(
+    'SELECT j.id, j.title, j.description, j.location, j.salary, j.posted_at, '
+    . '(SELECT COUNT(*) FROM applications a WHERE a.job_id = j.id) AS app_count, '
+    . '(SELECT COUNT(*) FROM applications a WHERE a.job_id = j.id AND a.status = ?) AS pending_cnt, '
+    . 'GROUP_CONCAT(DISTINCT s.name ORDER BY s.name SEPARATOR ",") AS skills '
+    . 'FROM jobs j '
+    . 'LEFT JOIN job_skills jk ON jk.job_id = j.id '
+    . 'LEFT JOIN skills s ON s.id = jk.skill_id '
+    . 'WHERE j.company_id = ? '
+    . 'GROUP BY j.id ORDER BY j.posted_at DESC',
+    ['pending', $company['id']]
+);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -44,11 +52,7 @@ $jobs = mongo_find('jobs', ['company_id' => mongo_object_id($company['_id'])], [
     <?php else: ?>
         <div class="row">
         <?php foreach ($jobs as $job): ?>
-            <?php
-                $job_id_str  = (string)$job['_id'];
-                $app_count   = mongo_count('applications', ['job_id' => mongo_object_id($job_id_str)]);
-                $pending_cnt = mongo_count('applications', ['job_id' => mongo_object_id($job_id_str), 'status' => 'pending']);
-            ?>
+            <?php $job_id_int = (int)$job['id']; ?>
             <div class="col-md-6 mb-4">
                 <div class="card h-100">
                     <div class="card-body">
@@ -56,22 +60,23 @@ $jobs = mongo_find('jobs', ['company_id' => mongo_object_id($company['_id'])], [
                         <p class="text-muted small"><?= sanitize($job['location'] ?? 'Remote') ?> &bull; PKR <?= number_format($job['salary'] ?? 0) ?>/mo</p>
                         <p><?= sanitize(substr($job['description'], 0, 100)) ?>...</p>
                         <div class="mb-2">
-                            <?php foreach ($job['skills'] ?? [] as $s): ?>
-                                <span class="badge bg-secondary"><?= sanitize($s) ?></span>
+                            <?php foreach (explode(',', $job['skills'] ?? '') as $s): ?>
+                                <?php if (trim($s) !== ''): ?>
+                                    <span class="badge bg-secondary"><?= sanitize($s) ?></span>
+                                <?php endif; ?>
                             <?php endforeach; ?>
                         </div>
                         <p class="small text-muted">
-                            <strong><?= $app_count ?></strong> application(s) &bull;
-                            <strong><?= $pending_cnt ?></strong> pending
+                            <strong><?= (int)$job['app_count'] ?></strong> application(s) &bull;
+                            <strong><?= (int)$job['pending_cnt'] ?></strong> pending
                         </p>
                     </div>
                     <div class="card-footer d-flex gap-2">
-                        <a href="recruiter_applicants.php?job_id=<?= urlencode($job_id_str) ?>" class="btn btn-primary btn-sm">View Applicants</a>
-                        <a href="recruiter_edit_job.php?job_id=<?= urlencode($job_id_str) ?>" class="btn btn-warning btn-sm">Edit</a>
-                        <!-- Delete with confirm -->
+                        <a href="recruiter_applicants.php?job_id=<?= urlencode($job_id_int) ?>" class="btn btn-primary btn-sm">View Applicants</a>
+                        <a href="recruiter_edit_job.php?job_id=<?= urlencode($job_id_int) ?>" class="btn btn-warning btn-sm">Edit</a>
                         <form method="post" onsubmit="return confirm('Delete this job and all its applications?')">
                             <input type="hidden" name="action" value="delete">
-                            <input type="hidden" name="job_id" value="<?= $job_id_str ?>">
+                            <input type="hidden" name="job_id" value="<?= $job_id_int ?>">
                             <button class="btn btn-danger btn-sm">Delete</button>
                         </form>
                     </div>

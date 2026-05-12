@@ -2,7 +2,7 @@
 require_once 'config.php';
 require_login();
 $user = current_user();
-$applicant = mongo_find_one('applicants', ['user_id' => mongo_object_id($user['_id'])]);
+$applicant = fetch_one('SELECT * FROM applicants WHERE user_id = ?', [$user['id']]);
 
 $message = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -11,19 +11,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $phone = sanitize($_POST['phone'] ?? '');
     $headline = sanitize($_POST['headline'] ?? '');
     $bio = sanitize($_POST['bio'] ?? '');
+    $cv_file = $applicant['cv_file'] ?? '';
 
     if ($full_name === '' || $email === '') {
         $message = '<div class="alert alert-danger">Name and email are required.</div>';
     } else {
-        mongo_update_one('applicants', ['_id' => mongo_object_id($applicant['_id'])], ['$set' => [
-            'full_name' => $full_name,
-            'email' => $email,
-            'phone' => $phone,
-            'headline' => $headline,
-            'bio' => $bio,
-        ]]);
-        $applicant = mongo_find_one('applicants', ['_id' => mongo_object_id($applicant['_id'])]);
-        $message = '<div class="alert alert-success">Profile updated successfully!</div>';
+        // Handle CV upload
+        if (isset($_FILES['cv_file']) && $_FILES['cv_file']['error'] === UPLOAD_ERR_OK) {
+            $allowed_ext = ['pdf', 'doc', 'docx'];
+            $file_info = pathinfo($_FILES['cv_file']['name']);
+            $file_ext = strtolower($file_info['extension']);
+
+            if (in_array($file_ext, $allowed_ext) && $_FILES['cv_file']['size'] <= 5 * 1024 * 1024) {
+                if (!is_dir('uploads')) mkdir('uploads', 0755, true);
+                $cv_file = 'uploads/cv_' . $applicant['id'] . '_' . time() . '.' . $file_ext;
+                move_uploaded_file($_FILES['cv_file']['tmp_name'], $cv_file);
+            } else {
+                $message = '<div class="alert alert-danger">Invalid CV file. Only PDF and Word documents (max 5MB) are allowed.</div>';
+            }
+        }
+
+        if ($message === '') {
+            execute(
+                'UPDATE applicants SET full_name = ?, email = ?, phone = ?, headline = ?, bio = ?, cv_file = ? WHERE id = ?',
+                [$full_name, $email, $phone, $headline, $bio, $cv_file, $applicant['id']]
+            );
+            $applicant = fetch_one('SELECT * FROM applicants WHERE id = ?', [$applicant['id']]);
+            $message = '<div class="alert alert-success">Profile updated successfully!</div>';
+        }
     }
 }
 ?>
@@ -56,7 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
                 <div class="card-body">
                     <?= $message ?>
-                    <form method="post">
+                    <form method="post" enctype="multipart/form-data">
                         <div class="mb-3">
                             <label class="form-label">Full Name</label>
                             <input type="text" name="full_name" class="form-control" value="<?= sanitize($applicant['full_name'] ?? '') ?>" required>
@@ -76,6 +91,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <div class="mb-3">
                             <label class="form-label">Bio</label>
                             <textarea name="bio" class="form-control" rows="5" placeholder="Tell us about yourself..."><?= sanitize($applicant['bio'] ?? '') ?></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Upload CV</label>
+                            <input type="file" name="cv_file" class="form-control" accept=".pdf,.doc,.docx">
+                            <small class="text-muted">Accepted formats: PDF, DOC, DOCX (max 5MB)</small>
+                            <?php if (!empty($applicant['cv_file']) && file_exists($applicant['cv_file'])): ?>
+                                <div class="mt-2">
+                                    <small>Current CV: <a href="<?= sanitize($applicant['cv_file']) ?>" target="_blank" class="btn-link">Download</a></small>
+                                </div>
+                            <?php endif; ?>
                         </div>
                         <button class="btn btn-primary">Save Changes</button>
                         <a href="skills.php" class="btn btn-secondary">Manage Skills</a>

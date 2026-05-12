@@ -2,13 +2,13 @@
 require_once 'config.php';
 require_recruiter_login();
 $recruiter = current_recruiter();
-$company   = mongo_find_one('companies', ['_id' => mongo_object_id($recruiter['company_id'])]);
-$all_skills = mongo_find('skills', [], ['sort' => ['name' => 1]]);
+$company = fetch_one('SELECT * FROM companies WHERE id = ?', [$recruiter['company_id']]);
+$all_skills = fetch_all('SELECT * FROM skills ORDER BY name ASC');
 
-$job_id = sanitize($_GET['job_id'] ?? '');
-if ($job_id === '') { header('Location: recruiter_jobs.php'); exit; }
+$job_id = (int)($_GET['job_id'] ?? 0);
+if ($job_id <= 0) { header('Location: recruiter_jobs.php'); exit; }
 
-$job = mongo_find_one('jobs', ['_id' => mongo_object_id($job_id), 'company_id' => mongo_object_id($company['_id'])]);
+$job = fetch_one('SELECT * FROM jobs WHERE id = ? AND company_id = ?', [$job_id, $company['id']]);
 if (!$job) { header('Location: recruiter_jobs.php'); exit; }
 
 $message = '';
@@ -24,19 +24,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($title === '' || $description === '') {
         $message = '<div class="alert alert-danger">Title and description are required.</div>';
     } else {
-        mongo_update_one('jobs', ['_id' => mongo_object_id($job_id)], ['$set' => [
-            'title'       => $title,
-            'description' => $description,
-            'location'    => $location,
-            'salary'      => $salary,
-            'skills'      => $skills,
-        ]]);
-        $job     = mongo_find_one('jobs', ['_id' => mongo_object_id($job_id)]);
-        $message = '<div class="alert alert-success">Job updated successfully!</div>';
+        try {
+            begin_transaction();
+            execute(
+                'UPDATE jobs SET title = ?, description = ?, location = ?, salary = ? WHERE id = ? AND company_id = ?',
+                [$title, $description, $location, $salary, $job_id, $company['id']]
+            );
+            execute('DELETE FROM job_skills WHERE job_id = ?', [$job_id]);
+            foreach ($skills as $skill_name) {
+                $skill = fetch_one('SELECT id FROM skills WHERE name = ?', [$skill_name]);
+                if ($skill) {
+                    execute('INSERT INTO job_skills (job_id, skill_id) VALUES (?, ?)', [$job_id, $skill['id']]);
+                }
+            }
+            commit_transaction();
+            $job = fetch_one('SELECT * FROM jobs WHERE id = ?', [$job_id]);
+            $message = '<div class="alert alert-success">Job updated successfully!</div>';
+        } catch (Exception $e) {
+            rollback_transaction();
+            $message = '<div class="alert alert-danger">Failed to update the job. Please try again.</div>';
+        }
     }
 }
 
-$job_skills = $job['skills'] ?? [];
+$job_skills = fetch_all('SELECT s.name FROM skills s JOIN job_skills jk ON s.id = jk.skill_id WHERE jk.job_id = ? ORDER BY s.name ASC', [$job_id]);
+$job_skill_names = array_map(fn($s) => $s['name'], $job_skills);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -85,9 +97,9 @@ $job_skills = $job['skills'] ?? [];
                                             <input class="form-check-input" type="checkbox"
                                                 name="skills[]"
                                                 value="<?= sanitize($skill['name']) ?>"
-                                                id="sk_<?= sanitize($skill['_id']) ?>"
-                                                <?= in_array($skill['name'], $job_skills, true) ? 'checked' : '' ?>>
-                                            <label class="form-check-label" for="sk_<?= sanitize($skill['_id']) ?>"><?= sanitize($skill['name']) ?></label>
+                                                id="sk_<?= sanitize($skill['id']) ?>"
+                                                <?= in_array($skill['name'], $job_skill_names, true) ? 'checked' : '' ?>>
+                                            <label class="form-check-label" for="sk_<?= sanitize($skill['id']) ?>"><?= sanitize($skill['name']) ?></label>
                                         </div>
                                     </div>
                                 <?php endforeach; ?>
