@@ -4,15 +4,12 @@ require_once 'config.php';
 $error = '';
 $success = '';
 
-// Test database connection
 try {
     $test = fetch_one('SELECT 1 as test');
-    // Database connection works
 } catch (Exception $e) {
     $error = 'Database connection error: ' . $e->getMessage();
 }
 
-// Redirect if already logged in
 if (isset($_SESSION['user'])) {
     header('Location: dashboard.php');
     exit;

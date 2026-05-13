@@ -43,16 +43,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             // Handle CV upload
             if (isset($_FILES['cv_file']) && $_FILES['cv_file']['error'] === UPLOAD_ERR_OK) {
-                $allowed_types = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
                 $allowed_ext = ['pdf', 'doc', 'docx'];
                 $file_info = pathinfo($_FILES['cv_file']['name']);
                 $file_ext = strtolower($file_info['extension']);
-                $file_type = mime_content_type($_FILES['cv_file']['tmp_name']);
+                $max_file_size = 5 * 1024 * 1024; // 5MB
 
-                if (in_array($file_ext, $allowed_ext) && $_FILES['cv_file']['size'] <= 5 * 1024 * 1024) {
+                if (in_array($file_ext, $allowed_ext) && $_FILES['cv_file']['size'] <= $max_file_size) {
                     if (!is_dir('uploads')) mkdir('uploads', 0755, true);
                     $cv_file = 'uploads/cv_' . $applicant['id'] . '_' . time() . '.' . $file_ext;
-                    move_uploaded_file($_FILES['cv_file']['tmp_name'], $cv_file);
+                    if (!move_uploaded_file($_FILES['cv_file']['tmp_name'], $cv_file)) {
+                        $message = '<div class="alert alert-danger">Failed to upload CV file. Please try again.</div>';
+                        $cv_file = '';
+                    }
                 } else {
                     $message = '<div class="alert alert-danger">Invalid CV file. Only PDF and Word documents (max 5MB) are allowed.</div>';
                 }

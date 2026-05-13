@@ -2,7 +2,7 @@
 session_start();
 
 // Database configuration
-const DB_HOST = '127.0.0.1';
+const DB_HOST = '';  // Empty = use default socket/pipe
 const DB_NAME = 'job_portal_db';
 const DB_USER = 'root';
 const DB_PASS = '';
@@ -11,8 +11,8 @@ const DB_CHARSET = 'utf8mb4';
 function db() {
     static $pdo = null;
     if ($pdo === null) {
-        $dsn = sprintf('mysql:host=%s;dbname=%s;charset=%s', DB_HOST, DB_NAME, DB_CHARSET);
         try {
+            $dsn = 'mysql:dbname=' . DB_NAME . ';charset=' . DB_CHARSET;
             $pdo = new PDO($dsn, DB_USER, DB_PASS, [
                 PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,

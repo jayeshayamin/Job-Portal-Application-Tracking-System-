@@ -72,6 +72,7 @@ CREATE TABLE applications (
     job_id INT NOT NULL,
     status ENUM('pending', 'shortlisted', 'accepted', 'rejected') NOT NULL DEFAULT 'pending',
     cover_letter TEXT NOT NULL,
+    cv_file VARCHAR(255) DEFAULT NULL,
     applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (applicant_id) REFERENCES applicants(id) ON DELETE CASCADE,
     FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE,
